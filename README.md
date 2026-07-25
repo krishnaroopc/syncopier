@@ -41,6 +41,32 @@ Syncopier fixes the interface without replacing the engine.
 - **Output detail** — silent, normal, or verbose robocopy logging
 - **Live error counter** that falls back to zero as failures are recovered
 
+## What's new in 1.2
+
+**Fixed: the OneDrive hydration warning described the whole source folder,
+not the job.** Resuming an interrupted 7,001-file range copy (4,428 files
+already done) warned that 68,361 files / 33.40 GB would be downloaded — the
+true remaining work was 2,573 files / 1.26 GB, a 26× overstatement. The
+warning now reports the files the job will actually copy, and a resume reads
+as "Resuming: 4,428 of 7,001 selected files are already at the destination;
+2,573 online-only files (1.26 GB) will be downloaded." `mode: 'all'` keeps
+whole-folder numbers, since they're correct there. The disk-space guard
+(`willExceedDisk`) now uses the same corrected figure, so it can no longer
+refuse a job that actually fits.
+
+Destination state for this check is read from the destination's own file
+metadata, not from robocopy scan output — robocopy prints no line for a file
+already identical at the destination, the same behaviour behind the v1.1
+"missing files" bug, so scan output alone can't tell "copied" from "absent."
+
+Also fixed in the same pass: two PowerShell calls used a placeholder test
+looser than the rest of the app (missing the reparse-point requirement, the
+exact looseness a v1.1 fix had already closed elsewhere) and a chunking
+routine that repeated the full source path per filename — safe on short
+paths, but it silently overflowed the Windows command-line limit on a deeply
+nested library path and (before a stricter error mode was added) reported
+"0 online-only" instead of failing visibly.
+
 ## What's new in 1.1
 
 **Fixed: files reported as missing when they were already copied.**

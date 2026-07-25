@@ -353,14 +353,31 @@ function renderOneDrive(od) {
     html += `<div class="notice ${w.level === 'blocked' ? 'bad' : 'info'}">${w.message}</div>`;
   }
 
+  // When the figures describe the selection rather than the whole folder, say
+  // so explicitly - otherwise a resume looks like it is about to download the
+  // entire library. od.scoped is undefined on older payloads, so the fallback
+  // is the original two-row layout.
+  const rows = od.scoped
+    ? `<dt>Files selected</dt><dd>${(od.selectedFiles ?? 0).toLocaleString()}</dd>
+       ${od.alreadyPresent > 0
+         ? `<dt>Already at destination</dt><dd>${od.alreadyPresent.toLocaleString()} (will be skipped)</dd>`
+         : ''}
+       <dt>Still to copy</dt><dd>${(od.remainingFiles ?? 0).toLocaleString()}</dd>
+       <dt>Of those, online-only</dt><dd>${(od.onlineOnly ?? 0).toLocaleString()} (${gb(od.onlineBytes ?? 0)})</dd>`
+    : `<dt>Files in source</dt><dd>${(od.totalFiles ?? 0).toLocaleString()}</dd>
+       <dt>Online-only</dt><dd>${(od.onlineOnly ?? 0).toLocaleString()} (${gb(od.onlineBytes ?? 0)})</dd>`;
+
   html += `<dl class="kv">
-    <dt>Files in source</dt><dd>${(od.totalFiles ?? 0).toLocaleString()}</dd>
-    <dt>Online-only</dt><dd>${(od.onlineOnly ?? 0).toLocaleString()} (${gb(od.onlineBytes ?? 0)})</dd>
+    ${rows}
     <dt>Free space</dt><dd>${gb(od.freeBytes ?? 0)} → ${gb(od.freeAfterBytes ?? 0)} after</dd>
   </dl>
   <p class="hint">Online-only files must be downloaded from the cloud before they can be
   copied, and they stay on your disk afterwards. Syncopier paces these downloads so the
-  OneDrive sync engine isn’t overloaded, and retries anything that fails.</p>`;
+  OneDrive sync engine isn’t overloaded, and retries anything that fails.${
+    od.scoped && od.alreadyPresent > 0
+      ? ' These figures cover only the files this job still has to copy — files already at the destination are not downloaded again.'
+      : ''
+  }</p>`;
 
   el.odBody.innerHTML = html;
 }
