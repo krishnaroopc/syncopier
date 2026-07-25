@@ -17,8 +17,9 @@
 * { box-sizing: border-box; }
 
 /* Base UI scale. Sizes below are in rem so this single value drives the whole
-   interface; v1.0's 14px base was too small on high-DPI displays. */
-html { font-size: 16px; }
+   interface; v1.0's 14px base was too small on high-DPI displays, and 16px
+   still read small in daily use. */
+html { font-size: 18px; }
 
 body {
   margin: 0;
@@ -92,7 +93,7 @@ main {
 /* ── inputs ──────────────────────────────────────────────── */
 .path-row {
   display: grid;
-  grid-template-columns: 92px 1fr auto;
+  grid-template-columns: 5.75rem 1fr auto;
   gap: 10px;
   align-items: center;
 }
@@ -122,7 +123,7 @@ input.good { border-color: #1d4429; }
 .lbl { display: block; color: var(--muted); font-size: 0.7812rem; margin-bottom: 6px; }
 .hint { margin: 8px 0 0; font-size: 0.7812rem; color: var(--muted); }
 .muted { color: var(--muted); }
-.field-msg { margin: 6px 0 0 102px; font-size: 0.7812rem; min-height: 1em; }
+.field-msg { margin: 6px 0 0 6.375rem; font-size: 0.7812rem; min-height: 1em; }
 .field-msg.bad { color: var(--danger); }
 .field-msg.ok { color: var(--accent-2); }
 
@@ -207,6 +208,30 @@ input[type=range] {
   word-break: break-all;
   line-height: 1.6;
 }
+
+/* Log panel disclosure - styled to match .card h2 (uppercase, muted, same
+   button layout) rather than the smaller .cmd summary, since this replaces a
+   full card heading rather than a minor collapsible detail. */
+.log-details summary {
+  cursor: pointer;
+  margin: 0 0 14px;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none; /* remove default marker so the custom ▸/▾ below is the only one */
+}
+.log-details summary::-webkit-details-marker { display: none; }
+.log-details summary::before {
+  content: '▸';
+  font-size: 0.7em;
+  transition: transform .15s ease;
+}
+.log-details[open] summary::before { transform: rotate(90deg); }
+.log-details[open] summary { margin-bottom: 14px; }
 
 /* ── buttons ─────────────────────────────────────────────── */
 .controls { display: flex; gap: 10px; flex-wrap: wrap; }

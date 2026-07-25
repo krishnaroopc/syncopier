@@ -107,16 +107,6 @@
         <p class="hint" id="conflictHint"></p>
       </div>
       <div>
-        <label class="lbl" for="retryRounds">Retry rounds for failed files</label>
-        <select id="retryRounds">
-          <option value="0">None</option>
-          <option value="1">1</option>
-          <option value="3" selected>3 (recommended)</option>
-          <option value="5">5</option>
-        </select>
-        <p class="hint">Files that fail are retried after everything else finishes.</p>
-      </div>
-      <div>
         <label class="lbl" for="verbosity">Output detail</label>
         <select id="verbosity">
           <option value="silent">Silent — errors only</option>
@@ -131,7 +121,7 @@
       <label class="chk"><input type="checkbox" id="subdirs" checked> Include subfolders <span class="flag">/E</span></label>
       <label class="chk"><input type="checkbox" id="restartable"> Restartable mode — resumes interrupted files, slower <span class="flag">/Z</span></label>
       <label class="chk danger"><input type="checkbox" id="mirror"> Mirror — <strong>deletes destination files that aren’t in the source</strong> <span class="flag">/MIR</span></label>
-      <label class="chk"><input type="checkbox" id="minimizeWindow" checked> Keep the robocopy window hidden <span class="muted">(output still appears below)</span></label>
+      <label class="chk"><input type="checkbox" id="retryUntilDone" checked> Retry failed files until the job finishes <span class="muted">(paced, backs off automatically)</span></label>
     </div>
 
     <details class="cmd">
@@ -207,8 +197,10 @@
 
   <!-- ── Log ───────────────────────────────────────────────── -->
   <section class="card">
-    <h2>Robocopy output <button class="btn tiny ghost" id="copyLog">Copy</button></h2>
-    <pre class="log" id="log"></pre>
+    <details class="log-details" open>
+      <summary>Robocopy output <button class="btn tiny ghost" id="copyLog">Copy</button></summary>
+      <pre class="log" id="log"></pre>
+    </details>
   </section>
 </main>
 

@@ -41,7 +41,7 @@ Syncopier fixes the interface without replacing the engine.
 - **Output detail** — silent, normal, or verbose robocopy logging
 - **Live error counter** that falls back to zero as failures are recovered
 
-## What's new in 1.2
+## Recent fixes
 
 **Fixed: the OneDrive hydration warning described the whole source folder,
 not the job.** Resuming an interrupted 7,001-file range copy (4,428 files

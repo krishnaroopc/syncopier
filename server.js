@@ -19,7 +19,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT) || 5173;
 const HOST = '127.0.0.1';
 const CONFIG_DIR = path.join(os.homedir(), '.syncopier');
-export const VERSION = '1.2.0';
+export const VERSION = '1.1.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

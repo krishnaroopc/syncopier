@@ -7,8 +7,8 @@ const el = {
   sourceMsg: $('sourceMsg'), destMsg: $('destMsg'),
   patterns: $('patterns'), rangeFrom: $('rangeFrom'), rangeTo: $('rangeTo'), rangeMsg: $('rangeMsg'),
   resource: $('resource'), resourceHint: $('resourceHint'),
-  conflict: $('conflict'), conflictHint: $('conflictHint'), retryRounds: $('retryRounds'),
-  verbosity: $('verbosity'), verbosityHint: $('verbosityHint'), minimizeWindow: $('minimizeWindow'),
+  conflict: $('conflict'), conflictHint: $('conflictHint'), retryUntilDone: $('retryUntilDone'),
+  verbosity: $('verbosity'), verbosityHint: $('verbosityHint'),
   loadMeter: $('loadMeter'), loadPill: $('loadPill'), loadFill: $('loadFill'), loadHint: $('loadHint'),
   stErrors: $('stErrors'), stErrorsCell: $('stErrorsCell'),
   subdirs: $('subdirs'), restartable: $('restartable'), mirror: $('mirror'), dehydrate: $('dehydrate'),
@@ -66,14 +66,13 @@ function config() {
     selection: selection(),
     resourceLevel: Number(el.resource.value),
     conflict: el.conflict.value,
-    retryRounds: Number(el.retryRounds.value),
+    retryUntilDone: el.retryUntilDone.checked,
     subdirs: el.subdirs.checked,
     restartable: el.restartable.checked,
     mirror: el.mirror.checked,
     skipOnlineOnly,
     dehydrateAfter: el.dehydrate.checked,
     verbosity: el.verbosity.value,
-    minimizeWindow: el.minimizeWindow.checked,
   };
 }
 
@@ -571,7 +570,10 @@ el.odSkip.onclick = () => { skipOnlineOnly = true; el.odCard.classList.add('hidd
 el.exportCsv.onclick = () => { if (jobId) location.href = `/api/failed.csv?job=${jobId}`; };
 el.retryFailed.onclick = () => { setRunning(true); send('start', { config: { ...config(), retryOnly: true } }); };
 
-el.copyLog.onclick = async () => {
+el.copyLog.onclick = async (e) => {
+  // Without this, a click on the button (inside <summary>) also toggles the
+  // <details> panel open/closed.
+  e.stopPropagation();
   await navigator.clipboard.writeText(el.log.textContent);
   el.copyLog.textContent = 'Copied';
   setTimeout(() => (el.copyLog.textContent = 'Copy'), 1200);
