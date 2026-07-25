@@ -42,9 +42,18 @@ Syncopier fixes the interface without replacing the engine.
 ## Requirements
 
 - Windows (robocopy is a Windows utility)
-- [Node.js](https://nodejs.org) 18 or newer
+- [Node.js](https://nodejs.org) 18 or newer — the launcher will point you at it if it's missing
 
 ## Install
+
+Download or clone the folder, then **double-click `Syncopier.vbs`**.
+
+That's it. It starts the background server and opens your browser — no console window, no typing. The first run offers to fetch one small dependency automatically.
+
+To stop it, double-click **`Stop Syncopier.vbs`**. (Closing the browser tab deliberately leaves it running, so closing a window can never kill a copy in progress.)
+
+<details>
+<summary>Command line, if you prefer</summary>
 
 ```bash
 git clone https://github.com/krishnaroopc/syncopier.git
@@ -54,8 +63,21 @@ npm start
 ```
 
 Then open <http://localhost:5173>.
+</details>
 
-The server binds to `127.0.0.1` only. It can run robocopy against any path your user account can reach, so it is deliberately not reachable from the network.
+### Why isn't it just an HTML file?
+
+Because a web page can't run `robocopy.exe` — browsers sandbox that away, deliberately. Something has to sit between the page and the copy engine, so Syncopier ships a tiny local server and the launcher hides it completely.
+
+The server binds to `127.0.0.1` only. It can run robocopy against any path your account can reach, so it is intentionally not reachable from the network.
+
+### Optional: desktop shortcut
+
+Right-click `Syncopier.vbs` → **Send to** → **Desktop (create shortcut)**, or run:
+
+```bat
+powershell -c "$s=(New-Object -COM WScript.Shell).CreateShortcut(\"$env:USERPROFILE\Desktop\Syncopier.lnk\");$s.TargetPath='wscript.exe';$s.Arguments='\"%CD%\Syncopier.vbs\"';$s.WorkingDirectory='%CD%';$s.IconLocation=\"$env:SystemRoot\System32\imageres.dll,27\";$s.Save()"
+```
 
 ## The resource slider
 
@@ -150,6 +172,8 @@ Syncopier's design rests on behaviour checked against the real `robocopy.exe` ra
 | Robocopy accepts a single named file | Makes "keep both" and per-file retries possible |
 | `/XJ` does **not** exclude OneDrive folders | They're reparse points but not junctions — measured identical file counts on a 245,570-file tree. A guard here would have been cargo-cult safety |
 | Conflict flags must not be applied to a `/L` scan | They'd hide the very files the scan needs to report as conflicts |
+
+One non-robocopy gotcha, in the launcher: in VBScript, reading `http.Status` after a failed `Send` raises its own error, so `If Err.Number = 0 And http.Status = 200` evaluates both sides and returns a **false positive**. That made the launcher think a dead port was live and open a browser at nothing. Status is now read only after `Send` has definitely succeeded.
 
 ## Licence
 
