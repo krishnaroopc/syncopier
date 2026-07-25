@@ -1,0 +1,39 @@
+{
+  "name": "syncopier",
+  "version": "1.0.0",
+  "description": "A local web GUI for Windows robocopy - progress bars, OneDrive-safe copying, numeric-range file selection, and a deferred retry queue.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "win32"
+  ],
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "keywords": [
+    "robocopy",
+    "windows",
+    "file-copy",
+    "backup",
+    "onedrive",
+    "files-on-demand",
+    "gui"
+  ],
+  "author": "krishnaroopc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krishnaroopc/syncopier.git"
+  },
+  "bugs": {
+    "url": "https://github.com/krishnaroopc/syncopier/issues"
+  },
+  "homepage": "https://github.com/krishnaroopc/syncopier#readme"
+}

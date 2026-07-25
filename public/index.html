@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Syncopier</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128190;</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">&#128190;</span>
+    <div>
+      <h1>Syncopier</h1>
+      <p class="tagline">A friendly front end for <strong>robocopy</strong>, the Windows Robust File Copy utility</p>
+    </div>
+  </div>
+  <div class="status-chip" id="statusChip">idle</div>
+</header>
+
+<main>
+  <!-- ── Paths ─────────────────────────────────────────────── -->
+  <section class="card">
+    <h2>Folders</h2>
+    <div class="path-row">
+      <label for="source">Source</label>
+      <input type="text" id="source" placeholder="C:\Users\you\Documents  (type a path or browse)" spellcheck="false">
+      <button class="btn ghost" data-browse="source">Browse…</button>
+    </div>
+    <p class="field-msg" id="sourceMsg"></p>
+
+    <div class="path-row">
+      <label for="dest">Destination</label>
+      <input type="text" id="dest" placeholder="D:\Backup" spellcheck="false">
+      <button class="btn ghost" data-browse="dest">Browse…</button>
+    </div>
+    <p class="field-msg" id="destMsg"></p>
+  </section>
+
+  <!-- ── Selection ─────────────────────────────────────────── -->
+  <section class="card">
+    <h2>What to copy</h2>
+    <div class="seg" role="tablist">
+      <button class="seg-btn active" data-mode="all">Everything</button>
+      <button class="seg-btn" data-mode="wildcard">Wildcard</button>
+      <button class="seg-btn" data-mode="range">Numbered range</button>
+    </div>
+
+    <div class="mode-panel" data-panel="all">
+      <p class="hint">Copies every file in the source folder.</p>
+    </div>
+
+    <div class="mode-panel hidden" data-panel="wildcard">
+      <label class="lbl" for="patterns">Patterns <span class="muted">(space separated)</span></label>
+      <input type="text" id="patterns" placeholder="*.jpg *.png report_*.pdf" spellcheck="false">
+      <p class="hint">Standard robocopy wildcards: <code>*</code> any characters, <code>?</code> one character.</p>
+    </div>
+
+    <div class="mode-panel hidden" data-panel="range">
+      <div class="range-row">
+        <div>
+          <label class="lbl" for="rangeFrom">First file</label>
+          <input type="text" id="rangeFrom" placeholder="file000234.ext" spellcheck="false">
+        </div>
+        <span class="range-arrow">→</span>
+        <div>
+          <label class="lbl" for="rangeTo">Last file</label>
+          <input type="text" id="rangeTo" placeholder="file001234.ext" spellcheck="false">
+        </div>
+      </div>
+      <p class="field-msg" id="rangeMsg"></p>
+      <p class="hint">
+        Robocopy has no concept of a numeric range, so Syncopier finds the candidates,
+        then filters to your exact bounds before copying — files just outside the range
+        are never touched.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Options ───────────────────────────────────────────── -->
+  <section class="card">
+    <h2>Options</h2>
+
+    <label class="lbl" for="resource">Resource usage</label>
+    <input type="range" id="resource" min="1" max="10" value="5">
+    <div class="slider-legend"><span>Gentle</span><span>Balanced</span><span>Maximum</span></div>
+    <p class="hint" id="resourceHint"></p>
+
+    <div class="opt-grid">
+      <div>
+        <label class="lbl" for="conflict">If a file already exists</label>
+        <select id="conflict">
+          <option value="overwrite">Overwrite it</option>
+          <option value="skip">Skip it</option>
+          <option value="keepboth">Keep both (adds “name (1).ext”)</option>
+        </select>
+        <p class="hint" id="conflictHint"></p>
+      </div>
+      <div>
+        <label class="lbl" for="retryRounds">Retry rounds for failed files</label>
+        <select id="retryRounds">
+          <option value="0">None</option>
+          <option value="1">1</option>
+          <option value="3" selected>3 (recommended)</option>
+          <option value="5">5</option>
+        </select>
+        <p class="hint">Files that fail are retried after everything else finishes.</p>
+      </div>
+    </div>
+
+    <div class="checks">
+      <label class="chk"><input type="checkbox" id="subdirs" checked> Include subfolders <span class="flag">/E</span></label>
+      <label class="chk"><input type="checkbox" id="restartable"> Restartable mode — resumes interrupted files, slower <span class="flag">/Z</span></label>
+      <label class="chk danger"><input type="checkbox" id="mirror"> Mirror — <strong>deletes destination files that aren’t in the source</strong> <span class="flag">/MIR</span></label>
+    </div>
+
+    <details class="cmd">
+      <summary>Command Syncopier will run</summary>
+      <code id="cmdPreview">robocopy …</code>
+    </details>
+  </section>
+
+  <!-- ── OneDrive pre-flight ───────────────────────────────── -->
+  <section class="card hidden" id="odCard">
+    <h2>☁ OneDrive detected</h2>
+    <div id="odBody"></div>
+    <div class="od-actions">
+      <button class="btn" id="odCopyAll">Copy everything</button>
+      <button class="btn ghost" id="odSkip">Skip online-only files</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="dehydrate"> Free the space again afterwards (set copied files back to online-only)</label>
+  </section>
+
+  <!-- ── Preview ───────────────────────────────────────────── -->
+  <section class="card hidden" id="previewCard">
+    <h2>Preview</h2>
+    <div id="previewBody"></div>
+  </section>
+
+  <!-- ── Controls ──────────────────────────────────────────── -->
+  <section class="controls">
+    <button class="btn primary" id="startBtn">Start copy</button>
+    <button class="btn ghost" id="scanBtn">Dry run</button>
+    <button class="btn ghost" id="pauseBtn" disabled>Pause</button>
+    <button class="btn danger-btn" id="cancelBtn" disabled>Cancel</button>
+  </section>
+
+  <!-- ── Progress ──────────────────────────────────────────── -->
+  <section class="card hidden" id="progressCard">
+    <h2>Progress</h2>
+
+    <div class="bar-label"><span>Overall</span><span id="overallPct">0%</span></div>
+    <div class="bar"><div class="fill" id="overallFill"></div></div>
+
+    <div id="fileBarWrap">
+      <div class="bar-label"><span class="ellipsis" id="currentFile">—</span><span id="filePct"></span></div>
+      <div class="bar sm"><div class="fill alt" id="fileFill"></div></div>
+    </div>
+
+    <div class="stats">
+      <div><span class="k">Copied</span><span class="v" id="stCopied">—</span></div>
+      <div><span class="k">Files</span><span class="v" id="stFiles">—</span></div>
+      <div><span class="k">Speed</span><span class="v" id="stSpeed">—</span></div>
+      <div><span class="k">ETA</span><span class="v" id="stEta">—</span></div>
+      <div><span class="k">Elapsed</span><span class="v" id="stElapsed">—</span></div>
+      <div><span class="k">Deferred</span><span class="v" id="stDeferred">0</span></div>
+    </div>
+  </section>
+
+  <!-- ── Deferred failures ─────────────────────────────────── -->
+  <section class="card hidden" id="failCard">
+    <h2>Deferred files <span class="badge" id="failCount">0</span></h2>
+    <p class="hint">These failed during the copy and will be retried once the main pass finishes.</p>
+    <div class="fail-list" id="failList"></div>
+    <div class="od-actions">
+      <button class="btn ghost" id="exportCsv">Export CSV</button>
+      <button class="btn ghost" id="retryFailed">Retry failed only</button>
+    </div>
+  </section>
+
+  <!-- ── Result ────────────────────────────────────────────── -->
+  <section class="card hidden" id="resultCard">
+    <h2>Result</h2>
+    <div id="resultBody"></div>
+  </section>
+
+  <!-- ── Log ───────────────────────────────────────────────── -->
+  <section class="card">
+    <h2>Robocopy output <button class="btn tiny ghost" id="copyLog">Copy</button></h2>
+    <pre class="log" id="log"></pre>
+  </section>
+</main>
+
+<footer>
+  <p>
+    Syncopier is a front end. Every byte is copied by
+    <strong>robocopy.exe</strong>, Microsoft’s Robust File Copy utility included with Windows.
+  </p>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
