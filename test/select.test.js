@@ -16,8 +16,59 @@ import {
   globCover,
   filterExact,
   batchNames,
+  resolveSelection,
   ARG_BUDGET,
 } from '../lib/select.js';
+
+test('REGRESSION: already-copied files are not reported as missing', async () => {
+  // The v1.0 bug. Robocopy prints a per-file line only for files it would ACT
+  // on; a file already present identically at the destination is counted under
+  // "Skipped" and produces NO line at all. Verified on a real run: 100 files in
+  // range came back as `Files: 100  Skipped: 100` with zero file lines.
+  //
+  // v1.0 inferred existence from those lines, so a fully-copied range looked
+  // exactly like a range whose files were never there - and it told the user
+  // 7,001 present files were missing.
+  //
+  // The scan function must therefore enumerate the SOURCE independently of the
+  // destination. This test pins that contract: given an enumerator that reports
+  // every source file, nothing may be reported missing.
+  const job = { selection: { mode: 'range', from: 'Img000001.tif', to: 'Img000005.tif' } };
+
+  const sourceHasEverything = async () => ({
+    files: [1, 2, 3, 4, 5].map((n) => ({
+      path: `C:\\src\\Img00000${n}.tif`,
+      bytes: 1000,
+      cls: 'New File',
+    })),
+  });
+
+  const sel = await resolveSelection(job, sourceHasEverything);
+  assert.equal(sel.preview.matched, 5);
+  assert.equal(sel.preview.missing.length, 0, 'present files must never be reported missing');
+  assert.equal(sel.preview.missingTotal, 0);
+
+  // And a genuinely absent file must still be caught - the fix must not paper
+  // over real gaps.
+  const sourceMissingTwo = async () => ({
+    files: [1, 2, 5].map((n) => ({
+      path: `C:\\src\\Img00000${n}.tif`,
+      bytes: 1000,
+      cls: 'New File',
+    })),
+  });
+  const sel2 = await resolveSelection(job, sourceMissingTwo);
+  assert.equal(sel2.preview.matched, 3);
+  assert.deepEqual(sel2.preview.missing, ['Img000003.tif', 'Img000004.tif']);
+  assert.equal(sel2.preview.missingTotal, 2);
+});
+
+test('missingTotal counts beyond the 100-item display cap', async () => {
+  const job = { selection: { mode: 'range', from: 'f00001.d', to: 'f00500.d' } };
+  const sel = await resolveSelection(job, async () => ({ files: [] }));
+  assert.equal(sel.preview.missing.length, 100, 'display list stays capped');
+  assert.equal(sel.preview.missingTotal, 500, 'but the total is honest');
+});
 
 test('parseNumbered keeps zero padding', () => {
   const p = parseNumbered('file000234.ext');

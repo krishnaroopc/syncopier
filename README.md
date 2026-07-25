@@ -38,6 +38,38 @@ Syncopier fixes the interface without replacing the engine.
 - **Nothing is silently lost** — files that fail are queued, retried after the main pass, and saved to disk so a crash can't lose the list
 - **Dry run** for every mode
 - **Pause, resume, cancel**
+- **Output detail** — silent, normal, or verbose robocopy logging
+- **Live error counter** that falls back to zero as failures are recovered
+
+## What's new in 1.1
+
+**Fixed: files reported as missing when they were already copied.**
+Robocopy prints a per-file line only for files it would *act* on. A file already
+present identically at the destination is counted under `Skipped` and produces
+no output line at all. v1.0 inferred existence from those lines, so a
+fully-copied range was indistinguishable from one whose files never existed —
+and it warned that thousands of present files were missing. Source enumeration
+now runs against a scratch directory, so existence never depends on what the
+destination already holds.
+
+**Fixed: SharePoint and Teams libraries were not recognised as cloud storage.**
+Detection matched the `%OneDrive%` path prefix only. A synced tenant library
+lives outside it — `C:\Users\you\CONTOSO\...`, not `C:\Users\you\OneDrive - CONTOSO\...` —
+so on a real library of 72,789 files (68,361 online-only, 33 GB) OneDrive mode
+never engaged: no thread cap, no pacing, no hydration warning, no disk-space
+guard. Detection now checks placeholder attributes, which the sync engine sets
+wherever the library is mounted. Note that the `Offline` bit *alone* is not a
+placeholder — ordinary local files can carry it — so a reparse point is required
+too.
+
+**Fixed: conflict detection only examined the first batch.** In a range of
+several thousand files, everything past the first ~200 names was invisible.
+
+**Restarting is now blocked while a copy is running**, via a PID-checked lock
+file. *Stop Syncopier* asks for confirmation instead of killing a copy silently.
+
+Also: larger UI text, an OneDrive load indicator on the resource slider, and the
+"just outside your range" list is collapsed by default.
 
 ## Requirements
 

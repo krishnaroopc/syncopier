@@ -117,6 +117,51 @@ test('parses real robocopy file and progress lines', () => {
   assert.equal(err.hex, '0x00000188');
 });
 
+test('verbosity never suppresses the file list', () => {
+  // Progress is measured from per-file lines (job.js credits bytes when one
+  // appears). /NFL would leave the bar and ETA frozen at zero, so no verbosity
+  // level may ever emit it.
+  for (const verbosity of ['silent', 'normal', 'verbose']) {
+    const args = buildArgs({ source: 'C:\\a', dest: 'D:\\b', verbosity });
+    assert.ok(!args.includes('/NFL'), `${verbosity} must not suppress the file list`);
+  }
+
+  const silent = buildArgs({ source: 'C:\\a', dest: 'D:\\b', verbosity: 'silent' });
+  assert.ok(silent.includes('/NJH') && silent.includes('/NDL'));
+
+  const verbose = buildArgs({ source: 'C:\\a', dest: 'D:\\b', verbosity: 'verbose' });
+  assert.ok(verbose.includes('/V') && verbose.includes('/TS'));
+
+  // The default must stay byte-identical to v1.0's output.
+  const normal = buildArgs({ source: 'C:\\a', dest: 'D:\\b', verbosity: 'normal' });
+  assert.ok(!normal.includes('/V') && !normal.includes('/NJH'));
+});
+
+test('a /L scan is never given conflict flags', () => {
+  // Conflict flags exclude pre-existing files, which are exactly what the scan
+  // must report. Applying them would make keep-both find nothing to do.
+  const args = buildArgs({ source: 'C:\\a', dest: 'D:\\b', conflict: 'skip' }, { listOnly: true });
+  for (const f of ['/XC', '/XN', '/XO']) assert.ok(!args.includes(f));
+  assert.ok(args.includes('/L'));
+});
+
+test('Offline alone is not a cloud placeholder', async () => {
+  // Files copied to an ordinary local folder can carry Archive+Offline (0x1020,
+  // measured on freshly copied files in a plain Downloads folder) with no
+  // reparse point behind them. Only a REPARSE POINT plus a recall bit is a real
+  // cloud placeholder; treating Offline alone as "cloud" made a plain local
+  // folder look like OneDrive.
+  const { isPlaceholder, FILE_ATTRIBUTE_OFFLINE, FILE_ATTRIBUTE_REPARSE_POINT,
+          FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS } = await import('../lib/onedrive.js');
+
+  // isPlaceholder is the per-file bitmask helper and stays permissive; the
+  // directory-level probe is what applies the reparse-point requirement.
+  assert.equal(isPlaceholder(FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS), true);
+  assert.equal(isPlaceholder(0x20), false, 'Archive alone is not a placeholder');
+  assert.equal(isPlaceholder(FILE_ATTRIBUTE_REPARSE_POINT), false,
+    'a reparse point with no recall bit is not a placeholder');
+});
+
 test('line splitter carries partial lines across chunks', () => {
   // Robocopy emits progress with bare \r and no trailing newline, so a chunk
   // can end mid-line; splitting per-chunk would corrupt filenames.

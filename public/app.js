@@ -8,6 +8,9 @@ const el = {
   patterns: $('patterns'), rangeFrom: $('rangeFrom'), rangeTo: $('rangeTo'), rangeMsg: $('rangeMsg'),
   resource: $('resource'), resourceHint: $('resourceHint'),
   conflict: $('conflict'), conflictHint: $('conflictHint'), retryRounds: $('retryRounds'),
+  verbosity: $('verbosity'), verbosityHint: $('verbosityHint'), minimizeWindow: $('minimizeWindow'),
+  loadMeter: $('loadMeter'), loadPill: $('loadPill'), loadFill: $('loadFill'), loadHint: $('loadHint'),
+  stErrors: $('stErrors'), stErrorsCell: $('stErrorsCell'),
   subdirs: $('subdirs'), restartable: $('restartable'), mirror: $('mirror'), dehydrate: $('dehydrate'),
   cmdPreview: $('cmdPreview'), statusChip: $('statusChip'),
   startBtn: $('startBtn'), scanBtn: $('scanBtn'), pauseBtn: $('pauseBtn'), cancelBtn: $('cancelBtn'),
@@ -69,6 +72,8 @@ function config() {
     mirror: el.mirror.checked,
     skipOnlineOnly,
     dehydrateAfter: el.dehydrate.checked,
+    verbosity: el.verbosity.value,
+    minimizeWindow: el.minimizeWindow.checked,
   };
 }
 
@@ -92,12 +97,65 @@ const CONFLICT_TEXT = {
   keepboth: 'Keeps the original and adds a numbered copy. Robocopy has no such mode, so these files are copied one at a time — slower when there are many conflicts.',
 };
 
+const VERBOSITY_TEXT = {
+  silent: 'Only errors and the final summary are logged. Progress and ETA still update normally.',
+  normal: 'One line per file copied — robocopy’s standard output.',
+  verbose: 'Adds skipped files, timestamps and full paths. Useful for diagnosing, noisy for big jobs.',
+};
+
+/* OneDrive load model.
+   Hydration is network-bound, and OneDrive throttles rather than going faster
+   under concurrency (findings 11, 12), so the copy is capped at /MT:4 in
+   OneDrive mode. The load shown is relative to that cap — not to the 32-thread
+   local maximum, which is unreachable here and would understate the risk. */
+const OD_LOAD = {
+  1: { pct: 8,  level: 'safe', text: 'Single threaded with a 50ms gap. Gentlest on the sync engine.' },
+  2: { pct: 8,  level: 'safe', text: 'Single threaded with a 50ms gap. Gentlest on the sync engine.' },
+  3: { pct: 35, level: 'safe', text: '2 download threads. Comfortable for the sync engine.' },
+  4: { pct: 35, level: 'safe', text: '2 download threads. Comfortable for the sync engine.' },
+  5: { pct: 35, level: 'safe', text: '2 download threads. Comfortable for the sync engine.' },
+  6: { pct: 60, level: 'warn', text: '3 download threads. Some ERROR 392/395 throttling is likely on large jobs.' },
+  7: { pct: 60, level: 'warn', text: '3 download threads. Some ERROR 392/395 throttling is likely on large jobs.' },
+  8: { pct: 60, level: 'warn', text: '3 download threads. Some ERROR 392/395 throttling is likely on large jobs.' },
+  9: { pct: 100, level: 'high', text: '4 download threads — the OneDrive ceiling. Past this point more threads provoke throttling instead of speed.' },
+  10: { pct: 100, level: 'high', text: '4 download threads — the OneDrive ceiling. Past this point more threads provoke throttling instead of speed.' },
+};
+
+const OD_LABEL = { safe: 'Comfortable', warn: 'Busy', high: 'At the ceiling' };
+
+// Set once the pre-flight confirms a OneDrive path is involved.
+let oneDriveActive = false;
+
+function refreshLoadMeter() {
+  el.loadMeter.hidden = !oneDriveActive;
+  if (!oneDriveActive) return;
+
+  const n = Number(el.resource.value);
+  const { pct, level, text } = OD_LOAD[n];
+  el.loadFill.style.width = `${pct}%`;
+  el.loadFill.dataset.level = level;
+  el.loadPill.textContent = OD_LABEL[level];
+  el.loadPill.dataset.level = level;
+
+  // The recommendation is the actionable half: a number alone doesn't tell you
+  // what to do about it.
+  const advice =
+    level === 'high'
+      ? ' Recommended: 5 or lower — it copies about as fast with far fewer retries.'
+      : level === 'warn'
+        ? ' Recommended: 5 if this run has many online-only files.'
+        : '';
+  el.loadHint.textContent = text + advice;
+}
+
 function refreshHints() {
   el.resourceHint.textContent = RESOURCE_TEXT[el.resource.value];
   el.conflictHint.textContent = CONFLICT_TEXT[el.conflict.value];
+  el.verbosityHint.textContent = VERBOSITY_TEXT[el.verbosity.value];
   // Per-file percentages are only attributable when robocopy runs single
   // threaded; with /MT the lines interleave across files.
   el.fileBarWrap.style.display = Number(el.resource.value) <= 2 ? '' : 'none';
+  refreshLoadMeter();
   updateCmd();
 }
 
@@ -259,15 +317,22 @@ function renderScan(m) {
       <dt>Range matched</dt><dd>${s.matched?.toLocaleString()} of ${s.requested?.toLocaleString()} requested</dd>
       <dt>First → last</dt><dd>${s.first ?? '—'} → ${s.last ?? '—'}</dd>
     </dl>`;
-    // Show what a glob-only implementation would have wrongly included.
+    // Files the covering glob caught that sit outside the requested bounds.
+    // They were correctly excluded — this is a correctness check, not a
+    // problem, so it stays collapsed rather than competing with real warnings.
     if (s.nearMisses?.length) {
-      html += `<div class="notice info"><strong>Just outside your range — not copied:</strong>
-        <div class="chips">${s.nearMisses.map((n) => `<span class="chip">${n}</span>`).join('')}</div></div>`;
+      const total = s.nearMissTotal ?? s.nearMisses.length;
+      html += `<details class="near-miss"><summary>${total} neighbouring file(s) excluded from the range</summary>
+        <p class="hint">These sit just outside ${s.first ?? '?'} → ${s.last ?? '?'} and were
+        <strong>not</strong> copied. Shown so an off-by-one in the range is easy to spot.</p>
+        <div class="chips">${s.nearMisses.map((n) => `<span class="chip">${n}</span>`).join('')}
+        ${total > s.nearMisses.length ? `<span class="chip">+${total - s.nearMisses.length} more</span>` : ''}</div></details>`;
     }
     if (s.missing?.length) {
-      html += `<div class="notice warn"><strong>${s.missing.length} file(s) in the range don’t exist in the source:</strong>
+      const total = s.missingTotal ?? s.missing.length;
+      html += `<div class="notice warn"><strong>${total.toLocaleString()} file(s) in the range don’t exist in the source:</strong>
         <div class="chips">${s.missing.slice(0, 12).map((n) => `<span class="chip">${n}</span>`).join('')}
-        ${s.missing.length > 12 ? `<span class="chip">+${s.missing.length - 12} more</span>` : ''}</div></div>`;
+        ${total > 12 ? `<span class="chip">+${(total - 12).toLocaleString()} more</span>` : ''}</div></div>`;
     }
   }
 
@@ -278,6 +343,9 @@ function renderScan(m) {
 
 function renderOneDrive(od) {
   el.odCard.classList.remove('hidden');
+  // The load meter is only meaningful once we know OneDrive is in play.
+  oneDriveActive = true;
+  refreshLoadMeter();
   const gb = (b) => `${(b / 1024 ** 3).toFixed(2)} GB`;
   let html = '';
 
@@ -311,6 +379,21 @@ function renderProgress(s) {
   el.stEta.textContent = fmtTime(s.etaSec);
   el.stElapsed.textContent = fmtTime(s.elapsedSec);
   el.stDeferred.textContent = s.deferred ?? 0;
+
+  // Outstanding errors, which fall back toward zero as retries succeed. When
+  // some have been cleared, show "n of m" so recovery is visible rather than
+  // the count merely appearing to shrink for no reason.
+  const outstanding = s.errors ?? 0;
+  const seen = s.errorsSeen ?? 0;
+  el.stErrors.textContent =
+    seen > outstanding ? `${outstanding} of ${seen}` : String(outstanding);
+  el.stErrorsCell.dataset.state = outstanding > 0 ? 'bad' : seen > 0 ? 'cleared' : 'none';
+  el.stErrorsCell.title =
+    seen === 0
+      ? 'No errors so far.'
+      : outstanding === 0
+        ? `All ${seen} error(s) were resolved on retry.`
+        : `${outstanding} file(s) still failing; ${seen} error(s) seen in total.`;
 }
 
 function addFailure(m) {

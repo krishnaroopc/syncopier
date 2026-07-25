@@ -87,6 +87,14 @@
     <input type="range" id="resource" min="1" max="10" value="5">
     <div class="slider-legend"><span>Gentle</span><span>Balanced</span><span>Maximum</span></div>
     <p class="hint" id="resourceHint"></p>
+    <div class="load-meter" id="loadMeter" hidden>
+      <div class="load-row">
+        <span class="load-label">OneDrive load</span>
+        <span class="load-pill" id="loadPill">—</span>
+      </div>
+      <div class="load-bar"><div class="load-fill" id="loadFill"></div></div>
+      <p class="hint" id="loadHint"></p>
+    </div>
 
     <div class="opt-grid">
       <div>
@@ -108,12 +116,22 @@
         </select>
         <p class="hint">Files that fail are retried after everything else finishes.</p>
       </div>
+      <div>
+        <label class="lbl" for="verbosity">Output detail</label>
+        <select id="verbosity">
+          <option value="silent">Silent — errors only</option>
+          <option value="normal" selected>Normal — one line per file</option>
+          <option value="verbose">Verbose — adds skipped files and timestamps</option>
+        </select>
+        <p class="hint" id="verbosityHint"></p>
+      </div>
     </div>
 
     <div class="checks">
       <label class="chk"><input type="checkbox" id="subdirs" checked> Include subfolders <span class="flag">/E</span></label>
       <label class="chk"><input type="checkbox" id="restartable"> Restartable mode — resumes interrupted files, slower <span class="flag">/Z</span></label>
       <label class="chk danger"><input type="checkbox" id="mirror"> Mirror — <strong>deletes destination files that aren’t in the source</strong> <span class="flag">/MIR</span></label>
+      <label class="chk"><input type="checkbox" id="minimizeWindow" checked> Keep the robocopy window hidden <span class="muted">(output still appears below)</span></label>
     </div>
 
     <details class="cmd">
@@ -166,6 +184,7 @@
       <div><span class="k">ETA</span><span class="v" id="stEta">—</span></div>
       <div><span class="k">Elapsed</span><span class="v" id="stElapsed">—</span></div>
       <div><span class="k">Deferred</span><span class="v" id="stDeferred">0</span></div>
+      <div id="stErrorsCell"><span class="k">Errors</span><span class="v" id="stErrors">0</span></div>
     </div>
   </section>
 

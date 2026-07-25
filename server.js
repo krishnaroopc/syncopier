@@ -19,6 +19,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT) || 5173;
 const HOST = '127.0.0.1';
 const CONFIG_DIR = path.join(os.homedir(), '.syncopier');
+export const VERSION = '1.1.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -103,6 +104,17 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await validatePath(p));
   }
 
+  // Lets the launcher and the UI tell "server up" from "copy in progress".
+  if (url.pathname === '/api/status' && req.method === 'GET') {
+    const busy = anyJobActive();
+    return json(res, 200, {
+      version: VERSION,
+      busy: Boolean(busy),
+      state: busy?.state ?? 'idle',
+      jobId: busy?.id ?? null,
+    });
+  }
+
   if (url.pathname === '/api/flags' && req.method === 'POST') {
     const cfg = await readBody(req);
     try {
@@ -175,6 +187,48 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 const jobs = new Map();
 
+// --- active-job lock -------------------------------------------------------
+// A copy can run for hours. Restarting the server mid-copy orphans the
+// robocopy child and loses the deferred-retry queue, so the lock is written to
+// disk and checked at STARTUP - not just per-connection. A stale lock from a
+// crashed run is detected by checking whether the recorded PID is still alive.
+const LOCK_FILE = path.join(CONFIG_DIR, 'active.lock');
+
+async function readLock() {
+  try {
+    const raw = await fs.readFile(LOCK_FILE, 'utf8');
+    const lock = JSON.parse(raw);
+    // A PID that no longer exists means the previous run died; the lock is stale.
+    try {
+      process.kill(lock.pid, 0);
+      return lock;
+    } catch {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+async function writeLock(jobId) {
+  await fs.mkdir(CONFIG_DIR, { recursive: true });
+  await fs.writeFile(
+    LOCK_FILE,
+    JSON.stringify({ pid: process.pid, jobId, startedAt: new Date().toISOString() }, null, 2),
+  );
+}
+
+async function clearLock() {
+  await fs.rm(LOCK_FILE, { force: true }).catch(() => {});
+}
+
+function anyJobActive() {
+  for (const j of jobs.values()) {
+    if (['scanning', 'copying', 'retrying', 'keepboth', 'dehydrating'].includes(j.state)) return j;
+  }
+  return null;
+}
+
 wss.on('connection', (ws) => {
   const send = (msg) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -191,8 +245,13 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 'start' || msg.action === 'scan') {
-      if (current && ['copying', 'scanning', 'retrying'].includes(current.state)) {
-        return send({ type: 'error', message: 'A job is already running.' });
+      // Guard against a second copy from any connection, not just this one.
+      const busy = anyJobActive();
+      if (busy) {
+        return send({
+          type: 'error',
+          message: `A job is already running (${busy.state}). Wait for it to finish, or cancel it first.`,
+        });
       }
       const cfg = { ...msg.config, dryRun: msg.action === 'scan' || msg.config?.dryRun };
       current = new Job(cfg, send);
@@ -206,7 +265,11 @@ wss.on('connection', (ws) => {
         /* non-fatal */
       }
 
-      current.run();
+      // Real copies hold the lock; a dry run moves no data and does not.
+      if (!cfg.dryRun) await writeLock(current.id);
+      current.run().finally(() => {
+        if (!cfg.dryRun) clearLock();
+      });
       return;
     }
 
@@ -222,7 +285,28 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Refuse to start on top of a live copy: two servers would fight over the same
+// deferred-retry queue, and restarting mid-copy orphans the robocopy child.
+// Pass --force to override once the situation is understood.
+const held = await readLock();
+if (held && !process.argv.includes('--force')) {
+  console.error(`\n  Syncopier is already running a copy (pid ${held.pid}, job ${held.jobId}).`);
+  console.error(`  Started ${held.startedAt}.`);
+  console.error(`\n  Wait for it to finish, or stop it first. Use --force to override.\n`);
+  process.exit(1);
+}
+if (held) {
+  console.warn(`\n  WARNING: --force used while job ${held.jobId} (pid ${held.pid}) is active.\n`);
+}
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, async () => {
+    await clearLock();
+    process.exit(0);
+  });
+}
+
 server.listen(PORT, HOST, () => {
-  console.log(`\n  Syncopier - a GUI for Windows robocopy`);
+  console.log(`\n  Syncopier ${VERSION} - a GUI for Windows robocopy`);
   console.log(`  Running at http://${HOST}:${PORT}\n`);
 });
